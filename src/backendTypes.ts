@@ -43,6 +43,7 @@ export interface GpuEnv {
   /** Running from an AppImage (`$APPIMAGE` set) — its bundled GL stack is the
    *  usual culprit for a silent CPU fallback; steer the user to the deb/rpm. */
   appimage: boolean;
+  packaged: boolean | null;
 }
 
 export interface BackupInfo {

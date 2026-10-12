@@ -122,6 +122,7 @@ export interface MediaCaptureResult {
 
 export interface KnownGraph {
   path: string;
+  display_path?: string;
   name: string;
 }
 
@@ -155,6 +156,9 @@ export interface CaptureGraphBindingResult {
 
 export interface GraphAccessInspection {
   graph_root: string;
+  display_graph_root?: string;
+  display_external_assets_path?: string | null;
+  wsl_rootfs?: boolean;
   external_assets_path: string | null;
   approved: boolean;
 }

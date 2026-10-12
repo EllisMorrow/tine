@@ -19,6 +19,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions use
 
 ### Fixed
 
+- Representable Windows graph paths display without verbatim prefixes; stored canonical paths retain existing graph identity (REG-WIN-GRAPH-PATH).
+- Cold launches from a Tine link restore the last graph before handling the link (UI-WIN-LINK-COLD-START).
+- New graphs refuse Windows access to WSL1 backing rootfs folders; existing graphs warn and remain openable, with advice to use `\\wsl.localhost\<distro>\…` (UI-WIN-WSL-ROOTFS).
+- Opening another graph replaces the previous graph's undismissed Guide announcement (UI-WIN-GUIDE-TOAST-ONCE).
+
 - A page that changed on disk while you were editing one of its blocks (a Syncthing delivery, another editor) now keeps the new text and your editor stays open on that block. Before, on Windows and Android an open code block, or a block whose SCHEDULED/DEADLINE line was not yet in its usual place, could write its old text back over the change and save it, and the editor closed (UI-CARRY-RELOAD-STALE-BLUR).
 - iOS (discussion #421): the folder-choice message now names both places a graph can live, On My iPhone → TineOutline and iCloud Drive → TineOutline. It said "inside On My iPhone", which read as if another app's folder there (such as Logseq's) would work.
 

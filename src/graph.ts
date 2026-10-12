@@ -104,16 +104,20 @@ export async function authorizeGraphAccess(path: string): Promise<boolean> {
   const inspected = await readOwned(owner, backend().inspectGraphAccess(path));
   if (inspected.kind === "stale") return false;
   const access = inspected.value;
+  if (access.wsl_rootfs) {
+    pushToast("This graph is inside a WSL1 rootfs. Windows access can corrupt Linux files. Open it through \\\\wsl.localhost\\<distro>\\… instead.", "warn", { sticky: true });
+  }
   const external = access.external_assets_path;
+  const displayExternal = access.display_external_assets_path ?? external;
   if (!external || access.approved) return true;
   const confirmation = await readOwned(owner, backend().confirm(
-    `This graph's assets folder points outside the graph to:\n\n${external}\n\nAllow Tine to read and write assets in this directory? This approval is stored only on this device.`,
+    `This graph's assets folder points outside the graph to:\n\n${displayExternal}\n\nAllow Tine to read and write assets in this directory? This approval is stored only on this device.`,
     "Allow external assets directory?"
   ));
   if (confirmation.kind === "stale") return false;
   if (!confirmation.value) {
     pushToast(
-      `Graph not opened: its external assets directory was not approved (${external}).`,
+      `Graph not opened: its external assets directory was not approved (${displayExternal}).`,
       "error",
       { sticky: true }
     );
@@ -618,17 +622,19 @@ export async function createNewGraph(): Promise<LoadGraphPathOutcome> {
     dir = prepared.path ?? dir;
   }
   let root: string;
+  let displayRoot: string | undefined;
   try {
     const created = await writeOwned(owner, backend().createGraph(dir));
     if (created.kind === "stale") return { kind: "aborted" };
-    root = created.value;
+    root = typeof created.value === "string" ? created.value : created.value.root;
+    displayRoot = typeof created.value === "string" ? undefined : created.value.display_root;
   } catch (e) {
     pushToast(`Couldn't create the graph. (${String(e)})`, "error");
     return { kind: "aborted" };
   }
   const loaded = await loadGraphPath(root);
   if (loaded.kind !== "loaded" || loaded.root !== root) {
-    pushToast(`Created the graph at ${root}, but kept the current graph open.`, "info");
+    pushToast(`Created the graph at ${displayRoot ?? root}, but kept the current graph open.`, "info");
     return loaded;
   }
   const loadedOwner = bindingOwner();

@@ -535,6 +535,8 @@ export interface AdvancedQueryResult {
 
 export interface GraphMeta {
   root: string;
+  /** Presentation only; root remains the canonical graph identity. */
+  display_root?: string;
   journals_dir: string;
   pages_dir: string;
   preferred_workflow: string; // "now" | "todo"

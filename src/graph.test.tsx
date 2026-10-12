@@ -41,12 +41,12 @@ async function loadHarness(
     inspectGraphAccess: vi.fn(async () => access),
     approveExternalAssets: vi.fn(async () => {}),
     confirm: vi.fn(async () => confirm),
-    loadGraph: vi.fn(async () => ({ kind: "loaded" as const, meta: META, binding_generation: 1 })),
+    loadGraph: vi.fn(async (): Promise<import("./backend").LoadGraphResult> => ({ kind: "loaded", meta: META, binding_generation: 1 })),
     pickFolder: vi.fn(async () => "/tmp"),
     pickGraphFolder: vi.fn(async (): Promise<GraphFolderPickResult> => mobile.pickerResult ?? { status: "cancelled" }),
     prepareGraphFolder: vi.fn(async (_path: string): Promise<PreparedGraphFolder> => ({ status: "ready", location: "local" })),
     defaultGraphParent: vi.fn(async () => "/tmp"),
-    createGraph: vi.fn(async () => META.root),
+    createGraph: vi.fn(async (): Promise<string | { root: string; display_root: string }> => META.root),
     getPage: vi.fn(async () => existing),
     resolvePage: vi.fn(async () => ({ kind: "absent" as const, id: "journals/2026_07_10.md" })),
     listTemplates: vi.fn(async () => [
@@ -159,14 +159,15 @@ async function loadHarness(
   vi.doMock("./themeGallery", () => ({ ensureThemeStyle: vi.fn() }));
   vi.doMock("./platform", () => ({ isMobile: () => platform !== "desktop", platformKind: vi.fn(async () => platform) }));
   vi.doMock("./guide", () => ({ maybeShowGuideAnnouncement: vi.fn() }));
-  vi.doMock("./workspaces", () => ({ clearWorkspaces: vi.fn() }));
+  const clearWorkspaces = vi.fn();
+  vi.doMock("./workspaces", () => ({ clearWorkspaces }));
   vi.doMock("./editorController", () => ({ endEdit: vi.fn() }));
 
   const { loadGraphPath, switchGraph, createNewGraph, refreshAfterRename, ensureJournalTemplateForDay, applyGraphConfigChange } = await import("./graph");
   return {
     loadGraphPath, switchGraph, createNewGraph, refreshAfterRename, ensureJournalTemplateForDay, applyGraphConfigChange, api, events, resetPageIndex, resetAt, waitForWarmCache,
     drainPdfWork, retirePdfOwnership, activatePdfOwnership, resetTabsToJournals, flushAll, resetStore, unsaved,
-    applyTemplateVars, prepareTemplateVars, openPage,
+    applyTemplateVars, prepareTemplateVars, openPage, clearWorkspaces,
   };
 }
 
@@ -176,6 +177,65 @@ afterEach(() => {
   localStorage.clear();
   vi.restoreAllMocks();
   vi.resetModules();
+});
+
+it("opens an existing Windows WSL rootfs graph and warns on every open", async () => {
+  const harness = await loadHarness(null);
+  const access = { graph_root: META.root, external_assets_path: null, approved: true, wsl_rootfs: true };
+  harness.api.inspectGraphAccess.mockResolvedValue(access);
+  await harness.loadGraphPath(META.root);
+  await harness.loadGraphPath(META.root);
+  expect(harness.api.loadGraph).toHaveBeenCalledTimes(2);
+  const { toasts } = await import("./toasts");
+  const warnings = toasts().filter(toast => toast.message.includes("corrupt Linux files"));
+  expect(warnings).toHaveLength(2);
+  expect(warnings[0].message).toContain("\\\\wsl.localhost\\<distro>\\");
+});
+
+it("shows the separate create reply spelling while opening its canonical root", async () => {
+  const harness = await loadHarness(null);
+  const root = "\\\\?\\C:\\notes";
+  const display_root = "C:\\notes";
+  harness.api.createGraph.mockResolvedValue({ root, display_root });
+  harness.api.loadGraph.mockResolvedValue({ kind: "focused_existing", window_label: "other" });
+  await harness.createNewGraph();
+  expect(harness.api.loadGraph).toHaveBeenCalledWith(root);
+  const { toasts } = await import("./toasts");
+  expect(toasts().at(-1)?.message).toContain(display_root);
+  expect(toasts().at(-1)?.message).not.toContain("\\\\?\\");
+});
+
+it("reports the WSL creation refusal without opening or replacing a graph", async () => {
+  const harness = await loadHarness(null);
+  await harness.loadGraphPath(META.root);
+  harness.api.loadGraph.mockClear();
+  harness.api.createGraph.mockRejectedValue(new Error(
+    "Windows access to a WSL1 rootfs can corrupt Linux files. Use \\\\wsl.localhost\\<distro>\\… instead."
+  ));
+  await expect(harness.createNewGraph()).resolves.toEqual({ kind: "aborted" });
+  expect(harness.api.loadGraph).not.toHaveBeenCalled();
+  const { graphMeta } = await import("./graphSession");
+  expect(graphMeta()?.root).toBe(META.root);
+  const { toasts } = await import("./toasts");
+  expect(toasts().at(-1)?.message).toContain("corrupt Linux files");
+  expect(toasts().at(-1)?.message).toContain("\\\\wsl.localhost\\<distro>\\");
+});
+
+it("keeps canonical graph identity and an open workspace when reopening the current graph", async () => {
+  const harness = await loadHarness(null);
+  const root = "\\\\?\\C:\\notes";
+  const display_root = "C:\\notes";
+  harness.api.inspectGraphAccess.mockResolvedValue({ graph_root: root, external_assets_path: null, approved: true });
+  harness.api.loadGraph.mockResolvedValue({ kind: "loaded", meta: { ...META, root, display_root }, binding_generation: 1 });
+  await harness.loadGraphPath(root);
+  const { graphMeta } = await import("./graphSession");
+  expect(graphMeta()?.root).toBe(root);
+  expect(graphMeta()?.display_root).toBe(display_root);
+  expect(localStorage.getItem("tine.graphPath")).toBe(root);
+  harness.clearWorkspaces.mockClear();
+  harness.api.loadGraph.mockResolvedValue({ kind: "already_current", meta: { ...META, root, display_root }, binding_generation: 1 });
+  await expect(harness.loadGraphPath(root)).resolves.toEqual({ kind: "already_current", root });
+  expect(harness.clearWorkspaces).not.toHaveBeenCalled();
 });
 
 // Ported from master graph.test.tsx "mobile graph folder picker" (027b5ae15,

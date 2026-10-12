@@ -188,7 +188,7 @@ export interface Backend {
   /** Scaffold a brand-new demo graph (onboarding "create new graph"); returns
    *  the created graph's root path to then `loadGraph`. Creates the graph in
    *  `dir` if empty, else in a fresh `tine-demo` subfolder. */
-  createGraph(dir: string): Promise<string>;
+  createGraph(dir: string): Promise<string | { root: string; display_root: string }>;
   /** The whole name inventory (physical pages/journals, aliases, reference-only
    *  names), each with the backend's resolved target. Cached only by
    *  `pageIndex.ts` holds the full inventory; `store.ts` separately indexes
@@ -926,7 +926,7 @@ class TauriBackend implements Backend {
     return this.call<string>("default_graph_parent");
   }
   createGraph(dir: string) {
-    return this.call<string>("create_graph", { dir });
+    return this.call<{ root: string; display_root: string }>("create_graph", { dir });
   }
   pageInventory() {
     return this.call<import("./types").PageInventory>("page_inventory");

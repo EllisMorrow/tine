@@ -837,8 +837,11 @@ fn default_linked_references_collapsed_threshold() -> u32 {
 #[deny(missing_docs)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GraphMeta {
-    /// Canonical graph root for display and OS handoff.
+    /// Canonical graph root for identity, persistence and OS handoff.
     pub root: String,
+    /// Presentable spelling, never used for graph identity or filesystem access.
+    #[serde(default)]
+    pub display_root: String,
     /// "now" (LATER/NOW) or "todo" (TODO/DOING) — display form of the
     /// graph configuration's `Workflow`, not an independent edit setting.
     pub preferred_workflow: String,
@@ -969,6 +972,7 @@ impl GraphMeta {
         journal_format: &crate::date::JournalFormat,
     ) -> Self {
         Self {
+            display_root: crate::graph_paths::normalize_graph_path(&root),
             root,
             preferred_workflow: match config.preferred_workflow {
                 crate::config::Workflow::Todo => "todo".into(),

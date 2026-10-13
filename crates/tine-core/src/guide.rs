@@ -543,6 +543,47 @@ mod rename_guide_tests {
     }
 
     #[test]
+    fn desktop_guide_says_a_store_install_updates_through_the_store() {
+        // GH #307: an MSIX install is updated by the Microsoft Store; the About text is quoted.
+        let platforms = include_str!("templates/platforms-and-mobile.md");
+        for outcome in [
+            "**Installed from the Microsoft Store (MSIX)?**",
+            "\"Updates come from the Microsoft Store.\"",
+            "Tine's own update checker and installer stay off",
+        ] {
+            assert!(
+                platforms.contains(outcome),
+                "missing Store-update Guide outcome: {outcome}"
+            );
+        }
+        let about = include_str!("../../../src/components/AboutTab.tsx");
+        assert!(
+            about.contains(">Updates come from the Microsoft Store.<"),
+            "the Guide quotes Settings → About's Store line; keep them in step"
+        );
+    }
+
+    #[test]
+    fn mobile_guide_names_each_store_as_its_update_channel() {
+        // Store builds ship this Guide, so it must not claim a store listing is missing,
+        // and each store install updates through its store (the in-app updater is off).
+        let platforms = include_str!("templates/platforms-and-mobile.md");
+        for outcome in [
+            "a Google Play install updates through Google Play",
+            "An App Store install updates through the App Store",
+        ] {
+            assert!(
+                platforms.contains(outcome),
+                "missing store-update Guide outcome: {outcome}"
+            );
+        }
+        assert!(
+            !platforms.contains("no App Store listing"),
+            "the App Store build ships this Guide; it must not say there is no listing"
+        );
+    }
+
+    #[test]
     fn a_capture_finished_after_a_graph_switch_is_documented() {
         // og H1b: kept in the graph it was started in, never the new one.
         let mobile = include_str!("templates/platforms-and-mobile.md");

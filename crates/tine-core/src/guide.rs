@@ -543,6 +543,27 @@ mod rename_guide_tests {
     }
 
     #[test]
+    fn desktop_guide_says_a_store_install_updates_through_the_store() {
+        // GH #307: an MSIX install is updated by the Microsoft Store; the About text is quoted.
+        let platforms = include_str!("templates/platforms-and-mobile.md");
+        for outcome in [
+            "**Installed from the Microsoft Store (MSIX)?**",
+            "\"Updates come from the Microsoft Store.\"",
+            "Tine's own update checker and installer stay off",
+        ] {
+            assert!(
+                platforms.contains(outcome),
+                "missing Store-update Guide outcome: {outcome}"
+            );
+        }
+        let about = include_str!("../../../src/components/AboutTab.tsx");
+        assert!(
+            about.contains(">Updates come from the Microsoft Store.<"),
+            "the Guide quotes Settings → About's Store line; keep them in step"
+        );
+    }
+
+    #[test]
     fn a_capture_finished_after_a_graph_switch_is_documented() {
         // og H1b: kept in the graph it was started in, never the new one.
         let mobile = include_str!("templates/platforms-and-mobile.md");

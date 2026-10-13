@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions use
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-10-13
+
 ### Added
 
 - Windows MSIX installs show that updates come from the Microsoft Store and disable Tine's self-updater (GH #307).
@@ -6579,7 +6581,8 @@ takes over your graph.
 - macOS and Windows installers are currently **unsigned** — on macOS right-click →
   Open; on Windows choose *More info → Run anyway*.
 
-[Unreleased]: https://github.com/martinkoutecky/tine/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/martinkoutecky/tine/compare/v0.7.2...HEAD
+[0.7.2]: https://github.com/martinkoutecky/tine/compare/v0.7.1...v0.7.2
 [0.6.98]: https://github.com/martinkoutecky/tine/compare/v0.6.97...v0.6.98
 [0.6.90]: https://github.com/martinkoutecky/tine/compare/v0.6.5...v0.6.90
 [0.6.0]: https://github.com/martinkoutecky/tine/compare/v0.5.10...v0.6.0

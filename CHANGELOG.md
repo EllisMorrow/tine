@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions use
 
 ## [Unreleased]
 
+### Fixed
+
+- Phones: query headers keep their title and view buttons readable, wrapping the buttons onto a second line instead of breaking words letter by letter (UI-MOBILE-QUERY-HEADER-WRAP).
+
 ## [0.7.2] - 2026-10-13
 
 ### Added

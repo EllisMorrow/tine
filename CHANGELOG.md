@@ -11,6 +11,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions use
 ### Fixed
 
 - Phones: query headers keep their title and view buttons readable, wrapping the buttons onto a second line instead of breaking words letter by letter (UI-MOBILE-QUERY-HEADER-WRAP).
+- Android: granting All files access while opening a graph now continues straight to the folder picker; it no longer needs a second tap (UI-ANDROID-ALL-FILES-ONE-TAP).
+- Phones: the left sidebar starts closed, so it no longer covers the journal after the first graph opens (UI-MOBILE-LEFT-DRAWER-STARTS-CLOSED).
 
 ## [0.7.2] - 2026-10-13
 

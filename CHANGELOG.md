@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions use
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-10-15
+
 ### Fixed
 
 - Phones: query headers keep their title and view buttons readable, wrapping the buttons onto a second line instead of breaking words letter by letter (UI-MOBILE-QUERY-HEADER-WRAP).
@@ -6587,7 +6589,8 @@ takes over your graph.
 - macOS and Windows installers are currently **unsigned** — on macOS right-click →
   Open; on Windows choose *More info → Run anyway*.
 
-[Unreleased]: https://github.com/martinkoutecky/tine/compare/v0.7.2...HEAD
+[Unreleased]: https://github.com/martinkoutecky/tine/compare/v0.7.3...HEAD
+[0.7.3]: https://github.com/martinkoutecky/tine/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/martinkoutecky/tine/compare/v0.7.1...v0.7.2
 [0.6.98]: https://github.com/martinkoutecky/tine/compare/v0.6.97...v0.6.98
 [0.6.90]: https://github.com/martinkoutecky/tine/compare/v0.6.5...v0.6.90

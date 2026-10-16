@@ -36,3 +36,6 @@ scripts/app-icon-1024.png
 
 # Private Reddit outreach data — keep locally, never publish
 reddit-backup/
+
+# Generated in CI by scripts/pages-beta-manifest.mjs (pages.yml)
+/website/updates/

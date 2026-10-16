@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions use
 
 ## [Unreleased]
 
+## [0.7.4] - 2026-10-16
+
 ### Fixed
 
 - iOS: launching Tine no longer shows a red "Could not apply interface zoom." error; the interface zoom setting now applies on iOS (UI-IOS-ZOOM-TOAST-ON-LAUNCH).
@@ -6593,7 +6595,8 @@ takes over your graph.
 - macOS and Windows installers are currently **unsigned** — on macOS right-click →
   Open; on Windows choose *More info → Run anyway*.
 
-[Unreleased]: https://github.com/martinkoutecky/tine/compare/v0.7.3...HEAD
+[Unreleased]: https://github.com/martinkoutecky/tine/compare/v0.7.4...HEAD
+[0.7.4]: https://github.com/martinkoutecky/tine/compare/v0.7.3...v0.7.4
 [0.7.3]: https://github.com/martinkoutecky/tine/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/martinkoutecky/tine/compare/v0.7.1...v0.7.2
 [0.6.98]: https://github.com/martinkoutecky/tine/compare/v0.6.97...v0.6.98

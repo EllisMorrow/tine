@@ -1,0 +1,1 @@
+Bug fixes: a reference picked from the (( block search now gives the block a proper id, so it keeps working after a restart and in Logseq; Journals opens on a first launch with a journal template; the Journals feed keeps loading older days while you edit; a page file a sync tool is replacing is no longer reported as unreadable.

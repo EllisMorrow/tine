@@ -1,9 +1,9 @@
 import { type Format, type PageKind } from "../../types";
-import { doc, formatForBlock, pageByName, setDoc } from "../model";
+import { authoredBlockClaims, doc, formatForBlock, pageByName, setDoc } from "../model";
 import { captureBinding, bindingCurrent } from "../../binding";
 import { readOwned, bindingOwner } from "../../owned";
 import { blockWritable } from "./properties";
-import { markDirty, flushPage, isConflicted, persistTogether } from "../save/engine";
+import { isConflicted, markDirty, settleWithWitness } from "../host/wiring";
 import { backend } from "../../backend";
 import { ensurePageLoaded } from "../workingSet";
 import { editBlock, type BlockIdentityFacts } from "../../render/parse";
@@ -65,14 +65,24 @@ function positionOf(roots: readonly string[], target: string): number[] | null {
  * acts as a second identity (GH #373). `navigation` is for a route or sidebar
  * item that opened an ID-less block by its runtime key and must keep showing it
  * after a reference to it stamps an `id::` in the same session: there the key
- * stays a locator for a block on the ref's page even once it has an id. */
-export function resolveBlockRef(ref: LoadedBlockRef, opts: { navigation?: boolean } = {}): string | null {
+ * stays a locator for a block on the ref's page even once it has an id.
+ * `locator` is for a caller that read `ref.uuid` as a runtime key and nothing
+ * else: only the live node under that key, on the ref's page, matches. */
+export function resolveBlockRef(ref: LoadedBlockRef, opts: { navigation?: boolean; locator?: boolean } = {}): string | null {
   const owner = pageByName(ref.page);
   if (
     !owner
     || owner.kind !== ref.pageKind
     || (ref.path !== undefined && owner.id !== ref.path)
   ) return null;
+
+  if (opts.locator) {
+    // The caller holds only a runtime key (a picker row for a block that had no
+    // authored id): that key names the block it was read from, even when another
+    // block's authored id happens to equal it (runtime keys are position-derived).
+    const runtime = doc.byId[ref.uuid];
+    return runtime && runtime.page === ref.page ? ref.uuid : null;
+  }
 
   if (ref.blockPos) {
     // A restored, not-yet-settled ref: only the position names the block, and
@@ -82,24 +92,10 @@ export function resolveBlockRef(ref: LoadedBlockRef, opts: { navigation?: boolea
     return id && node && node.page === ref.page && existingBlockId(node.raw, formatForBlock(id)) === null ? id : null;
   }
 
-  const stack = [...owner.roots];
-  const seen = new Set<string>();
-  let authoredClaim: string | null = null;
-  while (stack.length) {
-    const id = stack.pop()!;
-    if (seen.has(id)) continue;
-    seen.add(id);
-    const node = doc.byId[id];
-    if (!node || node.page !== ref.page) continue;
-    if (existingBlockId(node.raw, formatForBlock(id)) === ref.uuid) {
-      // A second authored claimant is ambiguous. Never guess, and never rewrite
-      // either block merely because a route exposed the conflict.
-      if (authoredClaim !== null) return null;
-      authoredClaim = id;
-    }
-    stack.push(...node.children);
-  }
-  if (authoredClaim !== null) return authoredClaim;
+  const claims = authoredBlockClaims(ref.page, ref.uuid);
+  // A second authored claimant is ambiguous. Never guess, and never rewrite
+  // either block merely because a route exposed the conflict.
+  if (claims?.size) return claims.size === 1 ? claims.values().next().value! : null;
 
   const runtime = doc.byId[ref.uuid];
   if (!runtime || runtime.page !== ref.page) return null;
@@ -146,9 +142,9 @@ export async function ensureBlockId(id: string): Promise<string | null> {
     setDoc("byId", id, "raw", rawWithBlockId(node.raw, uuid, fmt));
     markDirty(node.page, "save-block");
   }
-  // Even a pre-existing id may not be on disk yet (added in-memory, not flushed);
-  // flush and only hand back the uuid if the write actually landed.
-  const ok = await flushPage(node.page);
+  // Even a pre-existing id may not be on disk yet (added in-memory, not flushed):
+  // hand back the uuid only once the page's published bytes carry it (§8, Q2).
+  const ok = await settleWithWitness(node.page, uuid);
   return ok && !isConflicted(node.page) && bindingCurrent(binding) ? uuid : null;
 }
 
@@ -183,12 +179,15 @@ async function stampBlockId(id: string, committed: string): Promise<string | nul
   const fmt = formatForBlock(id);
   const existing = existingBlockId(node.raw, fmt);
   if (existing && existing !== committed) return null;
+  // GH #798: Tine's own `b<base36>-<n>` key is never an id:: in a file; a
+  // reference to it cannot resolve in Logseq, nor in Tine after a restart.
+  if (!existing && committed === id && !isBlockRefUuid(committed)) return null;
   const uuid = existing ?? committed;
   if (!existing) {
     setDoc("byId", id, "raw", rawWithBlockId(node.raw, uuid, fmt));
     markDirty(node.page, "save-block");
   }
-  const ok = await flushPage(node.page);
+  const ok = await settleWithWitness(node.page, uuid);
   return ok && !isConflicted(node.page) && bindingCurrent(binding) && doc.byId[id]?.page === node.page
     && existingBlockId(doc.byId[id].raw, fmt) === uuid ? uuid : null;
 }
@@ -227,25 +226,37 @@ export function settleBlockRef(ref: LoadedBlockRef): LoadedBlockRef | null {
  * default `externalId`. Resolution goes through {@link resolveBlockRef}, so an
  * authored id wins and a runtime key is only a fallback for an ID-less block
  * (GH #373). Backend read errors reject; a missing, stale or unwritable
- * target resolves false. `externalId` is the ID to persist, stamped exactly. Without a callback,
- * flush the target page and resolve true only when its ID reaches disk.
- * With `insertReference`, validate the ID first, then call it synchronously to
- * edit the source and return its page name (null aborts without a write). The
- * grouped save writes the target ID before the source reference, so a crash
- * between files leaves at most an unreferenced ID. A failed save resolves false
- * and leaves both edits visible for conflict resolution. Cost: one page lookup
- * and one page or grouped save, possibly with other pending edits on the pages. */
+ * target resolves false. Without a callback, `externalId` is the ID an existing
+ * reference already carries: it is stamped exactly, flushed, and true resolves
+ * only when it reaches disk; a non-UUID runtime key is refused (GH #798).
+ * With `insertReference`, the reference is not written yet: stamp the target's
+ * ID, wait until its published bytes carry it (STEP3 §8, Q2), then call it with
+ * that ID to edit the source and return its page name (null aborts). The ID is
+ * the target's authored id when it has one, else `externalId` when the caller
+ * read it as an authored id, else a fresh random UUID: when `externalId` is the
+ * runtime locator `uuid` and the block has no id yet, that key is never
+ * persisted (GH #373, GH #798; OG's block-on-chosen-handler writes the block's
+ * random UUID). `intended` is the caller's editor intent, checked before
+ * the stamp; `insertReference` checks it again and returns null once it expired
+ * (Q-TS6), so an intent that expired during a lookup or a barrier stamps or
+ * inserts nothing. A crash between the two leaves at most an unreferenced ID.
+ * A failed barrier (conflict, save error) resolves false and leaves the source
+ * unedited. Cost: one page lookup and one target save, possibly with other
+ * pending edits on that page. */
 export async function persistBlockRefTarget(
   uuid: string,
   page: string,
   kind: PageKind,
   path?: string,
   externalId: string = uuid,
-  insertReference?: () => string | null,
+  insertReference?: (stampedId: string) => string | null,
+  intended: () => boolean = () => true,
 ): Promise<boolean> {
   const owner = bindingOwner();
   const ref: LoadedBlockRef = { uuid: externalId, page, pageKind: kind, ...(path ? { path } : {}) };
-  if (!resolveBlockRef(ref)) {
+  // A pick whose only id is its runtime key names the block under that key.
+  const locator = !!insertReference && externalId === uuid;
+  if (!resolveBlockRef(ref, { locator })) {
     const result = await readOwned(owner, path
       ? backend().getPageByPath(path)
       : backend().getPage(page, kind));
@@ -256,23 +267,25 @@ export async function persistBlockRefTarget(
   // Re-check: a concurrent navigation may have loaded the page meanwhile, or the
   // cache may have been rebuilt (external change) and reassigned the block a new
   // uuid — in which case there's nothing safe to stamp.
-  const id = resolveBlockRef(ref);
+  const id = resolveBlockRef(ref, { locator });
   if (!id || !owner() || !blockWritable(id)) return false;
-  // `externalId` is the value the caller has committed (or will commit) as the
-  // reference, so it is stamped exactly, even when it equals the runtime key.
+  // Without a callback `externalId` is already committed as a reference, so it
+  // is stamped exactly (a UUID-shaped runtime key included, GH #373).
   if (!insertReference) return (await stampBlockId(id, externalId)) === externalId;
+  if (!intended()) return false;
   const target = doc.byId[id];
   const fmt = formatForBlock(id);
   const existing = existingBlockId(target.raw, fmt);
-  const stableId = existing ?? externalId;
-  if (stableId !== externalId) return false;
-  const sourcePage = insertReference();
-  if (!sourcePage || !owner()) return false;
-  if (!existing) setDoc("byId", id, "raw", rawWithBlockId(target.raw, stableId, fmt));
-  // A reference may reach disk only after its target ID does. orderedMembers
-  // writes the dependency destination first, independent of page name order.
-  const saved = await persistTogether([sourcePage, target.page], "save-block", [[sourcePage, target.page]]);
-  return saved && !isConflicted(sourcePage) && !isConflicted(target.page)
-    && owner() && doc.byId[id]?.page === target.page
-    && existingBlockId(doc.byId[id].raw, fmt) === stableId;
+  const stableId = existing ?? (locator ? crypto.randomUUID() : externalId);
+  if (!locator && stableId !== externalId) return false;
+  if (!existing) {
+    setDoc("byId", id, "raw", rawWithBlockId(target.raw, stableId, fmt));
+    markDirty(target.page, "save-block");
+  }
+  // A reference may reach disk only after its target ID does (STEP3 §8, Q2):
+  // the source is edited only once the target's published bytes carry the ID
+  // and the live target still holds it. A failed barrier leaves the source as it was.
+  if (!await settleWithWitness(target.page, stableId) || !owner() || doc.byId[id]?.page !== target.page
+    || existingBlockId(doc.byId[id].raw, fmt) !== stableId) return false;
+  return !!insertReference(stableId) && !!owner();
 }
